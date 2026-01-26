@@ -94,17 +94,16 @@ class Soldier(pygame.sprite.Sprite):
             self.image = self.frames[self.current_frame]
 
 def start_battle(power, enemies):
-    from main import COINS
-
+    temp_power = power
     for enemy in enemies:
-        if enemy.power > power:
-            return False
+        if enemy.power > temp_power:
+            return False, 0
         else:
-            power -= enemy.power
+            temp_power -= enemy.power
 
     collective_value = sum(enemy.value for enemy in enemies)
-    COINS += collective_value
-    return True
+    return True, collective_value
+
 
 def draw_tower(screen):
     global TOWER_IMG

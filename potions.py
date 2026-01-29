@@ -1,16 +1,16 @@
 import pygame, string
 
 POWER_MAP = {
-    "uppercase": 5,
-    "special_characters": 10,
-    "numbers": 15,
-    "lowercase": 2
+    "uppercase": 15,
+    "special_characters": 25,
+    "numbers": 35,
+    "lowercase": 5
 }
 
 POTION_PRICES_MAP = {
-    "uppercase": 50,
-    "special_characters": 80,
-    "numbers": 100,
+    "uppercase": 25,
+    "special_characters": 35,
+    "numbers": 50,
 }
 
 def get_power(password):

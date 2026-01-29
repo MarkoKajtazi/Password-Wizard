@@ -1,5 +1,5 @@
-# TODO: Arrows shooting, password limit, potion prices, waves, power display
-
+# TODO: Arrows shooting, power display
+import math
 import random
 import pygame, sys
 from potions import handle_typing, get_power, buy_ingredient, sell_ingredient
@@ -10,6 +10,7 @@ WINDOW_HEIGHT = 600
 UI_PANEL_COLOR = (30, 30, 35)
 
 STATE = "IDLE"
+WAVE = 1
 PASSWORD = ""
 COINS = 200
 INVENTORY = {
@@ -29,13 +30,19 @@ for i, cat in enumerate(categories):
 
 
 def start_new_round():
-    num = random.randint(3, 7)
+    base_enemies = 3
+    coef = 1.3
+    num_min = math.floor(base_enemies * (coef ** (WAVE - 2)))
+    num_max = math.ceil(base_enemies * (coef ** (WAVE - 1)))
+    num = random.randint(num_min, num_max)
     group = pygame.sprite.Group()
+
     for _ in range(num):
         etype = random.choice(["goblin", "soldier"])
         rx, ry = random.randint(-350, -75), random.randint(430, 470)
         enemy = SmallGoblin(rx, ry) if etype == "goblin" else Soldier(rx, ry)
         group.add(enemy)
+
     return group
 
 
@@ -92,8 +99,8 @@ def draw_sidebar(screen, font, font_bold, power_val, scroll_surf, potion_assets,
         sell_lbl = font.render("SELL", True, (255, 255, 255))
         screen.blit(sell_lbl, (rects["sell"].x + 8, rects["sell"].y + 2))
 
-    # p_text = font_bold.render(f"POTION POWER: {power_val}", True, (30, 80, 30))
-    # screen.blit(p_text, (725, 300))
+    p_text = font_bold.render(f"POTION POWER              {power_val}", True, (30, 80, 30))
+    screen.blit(p_text, (725, 300))
 
     input_box = pygame.Rect(700, 440, 260, 45)
     pygame.draw.rect(screen, (80, 60, 40), input_box, 2, border_radius=5)
@@ -101,9 +108,12 @@ def draw_sidebar(screen, font, font_bold, power_val, scroll_surf, potion_assets,
     txt_surf = font.render(PASSWORD + "|", True, (40, 30, 20))
     screen.blit(txt_surf, (input_box.x + 10, input_box.y + 15))
 
+    max_len = 4 + (WAVE * 2)
+    limit_text = font_bold.render(f"Limit {len(PASSWORD)}/{max_len}", True, (100, 50, 50))
+    screen.blit(limit_text, (710, 490))
 
 def main():
-    global STATE, PASSWORD, COINS, INVENTORY, WAVE_ENEMIES
+    global STATE, PASSWORD, COINS, INVENTORY, WAVE_ENEMIES, WAVE
     pygame.init()
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
     pygame.display.set_caption("Potion Defense")
@@ -169,14 +179,23 @@ def main():
                         if rects["sell"].collidepoint(event.pos):
                             COINS, INVENTORY, PASSWORD = sell_ingredient(cat, COINS, INVENTORY, PASSWORD)
 
-                result = handle_typing(event, PASSWORD, INVENTORY)
-                if result == "SUBMITTED":
-                    WAVE_ENEMIES = start_new_round()
-                    STATE = "BATTLE"
-                else:
-                    PASSWORD = result
+                max_len = 4 + (WAVE * 2)
+
+                if event.type == pygame.KEYDOWN:
+                    if event.key in (pygame.K_BACKSPACE, pygame.K_KP_ENTER, pygame.K_RETURN):
+                        result = handle_typing(event, PASSWORD, INVENTORY)
+                    elif len(PASSWORD) < max_len:
+                        result = handle_typing(event, PASSWORD, INVENTORY)
+                    else:
+                        result = PASSWORD
+                    if result == "SUBMITTED":
+                        WAVE_ENEMIES = start_new_round()
+                        STATE = "BATTLE"
+                    else:
+                        PASSWORD = result
 
         if STATE == "BATTLE":
+            draw_title(screen, f"WAVE {WAVE}")
             WAVE_ENEMIES.update(dt)
             WAVE_ENEMIES.draw(screen)
 
@@ -192,6 +211,9 @@ def main():
                 if success:
                     COINS += collected_coins
                     STATE, PASSWORD = "IDLE", ""
+                    if WAVE == 5:
+                        STATE = "GAME OVER"
+                    else: WAVE += 1
                 else:
                     STATE = "DEFEAT"
 
@@ -199,11 +221,18 @@ def main():
             overlay = font_bold.render("DEFEATED! Press R to restart", True, (255, 0, 0))
             screen.blit(overlay, (300, 300))
             if pygame.key.get_pressed()[pygame.K_r]:
-                COINS, STATE, PASSWORD = 200, "IDLE", ""
+                COINS, STATE, PASSWORD, WAVE = 200, "IDLE", "", 1
 
+        elif STATE == "IDLE":
+            draw_title(screen, "Password Wizard")
+
+        elif STATE == "GAME OVER":
+            overlay = font_bold.render("VICTORY! Press R to restart", True, (255, 0, 0))
+            screen.blit(overlay, (300, 300))
+            if pygame.key.get_pressed()[pygame.K_r]:
+                COINS, STATE, PASSWORD, WAVE = 200, "IDLE", "", 1
 
         draw_sidebar(screen, font_small, font_bold, power_val, SCROLL_IMG, POTION_SPRITES, STATIC_COIN)
-        draw_title(screen, "Password Wizard")
         pygame.display.update()
 
 

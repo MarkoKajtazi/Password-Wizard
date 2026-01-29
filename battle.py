@@ -12,7 +12,7 @@ class SmallGoblin(pygame.sprite.Sprite):
             "assets/Tiny RPG Character/Characters(100x100)/Orc/Orc/Orc-Attack02.png").convert_alpha()
 
         self.power = 10
-        self.value = 10
+        self.value = 20
         self.is_done = False
 
         self.walk_frames = self.load_frames(self.walk_sheet, 8, 1)
@@ -58,7 +58,7 @@ class Soldier(pygame.sprite.Sprite):
             "assets/Tiny RPG Character/Characters(100x100)/Soldier/Soldier/Soldier-Attack02.png").convert_alpha()
 
         self.power = 15
-        self.value = 15
+        self.value = 25
         self.is_done = False
 
         self.walk_frames = self.load_frames(self.walk_sheet, 8, 1)

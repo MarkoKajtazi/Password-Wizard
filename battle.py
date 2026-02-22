@@ -1,6 +1,52 @@
 import pygame
 import random
+import math
 TOWER_IMG = None
+ARROW_IMG = None
+
+
+class Arrow(pygame.sprite.Sprite):
+    def __init__(self, start_x, start_y, target_enemy):
+        super().__init__()
+        global ARROW_IMG
+
+        if ARROW_IMG is None:
+            arrow_surface = pygame.image.load(
+                "assets/Tiny RPG Character/Arrow(Projectile)/Arrow01(32x32).png").convert_alpha()
+            ARROW_IMG = pygame.transform.scale(arrow_surface, (64, 64))
+
+        self.original_image = ARROW_IMG
+        self.image = ARROW_IMG
+        self.rect = self.image.get_rect(center=(start_x, start_y))
+        self.pos = [float(start_x), float(start_y)]
+        self.target = target_enemy
+        self.speed = 8
+        self.hit = False
+
+    def update(self, dt):
+        if self.target and not self.hit:
+            # Calculate direction to target
+            target_x = self.target.rect.centerx
+            target_y = self.target.rect.centery
+
+            dx = target_x - self.pos[0]
+            dy = target_y - self.pos[1]
+            dist = max(1, (dx**2 + dy**2)**0.5)
+
+            # Calculate angle and rotate arrow to point toward target
+            angle = math.degrees(math.atan2(-dy, dx))
+            self.image = pygame.transform.rotate(self.original_image, angle)
+            self.rect = self.image.get_rect(center=self.rect.center)
+
+            # Move toward target
+            self.pos[0] += self.speed * dx / dist
+            self.pos[1] += self.speed * dy / dist
+            self.rect.center = (int(self.pos[0]), int(self.pos[1]))
+
+            # Check if arrow reached target
+            if abs(dx) < 20 and abs(dy) < 20:
+                self.hit = True
+                self.kill()
 
 class SmallGoblin(pygame.sprite.Sprite):
     def __init__(self, x, y):

@@ -29,6 +29,9 @@ jobs:
       - name: Install Pygbag
         run: pip install pygbag
 
+      - name: Remove unused audio files (MP3 not supported on web)
+        run: rm -rf assets/pixel_defenders_project_assets/Audio
+
       - name: Build with Pygbag
         run: pygbag --build .
 

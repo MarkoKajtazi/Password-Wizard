@@ -8,11 +8,37 @@ WINDOW_WIDTH = 1000
 WINDOW_HEIGHT = 600
 UI_PANEL_COLOR = (30, 30, 35)
 
+
+def draw_wrapped_text(screen, text, font, color, rect, padding=20):
+    """Draw text wrapped to fit within a rectangle."""
+    words = text.split(' ')
+    lines = []
+    current_line = ""
+    max_width = rect.width - (padding * 2)
+
+    for word in words:
+        test_line = current_line + word + " "
+        if font.size(test_line)[0] <= max_width:
+            current_line = test_line
+        else:
+            if current_line:
+                lines.append(current_line.strip())
+            current_line = word + " "
+    if current_line:
+        lines.append(current_line.strip())
+
+    y = rect.y + padding
+    line_height = font.get_height() + 4
+    for line in lines:
+        text_surf = font.render(line, True, color)
+        screen.blit(text_surf, (rect.x + padding, y))
+        y += line_height
+
 STATE = "MENU"
 WAVE = 1
 STORY_PANEL = 0  # Track which story panel to show (0 = none yet)
 PASSWORD = ""
-COINS = 200
+COINS = 50
 INVENTORY = {
     "uppercase": 0,
     "special_characters": 0,
@@ -23,6 +49,19 @@ WAVE_ENEMIES = pygame.sprite.Group()
 ARROWS = pygame.sprite.Group()
 ARROW_SPAWN_TIMER = 0
 ARROW_SPAWN_INDEX = 0
+
+TUTORIAL_STEP = 0
+SHOW_VICTORY_MESSAGE = False
+TUTORIAL_MESSAGES = [
+    "Ah, we're under attack!!",
+    "You must make a good password potion to defend us!",
+    "Lowercase letters are free to use anytime.",
+    "Buy CAPS, NUMBERS, or SPECIAL from the shop to unlock them.",
+    "NUMBERS are the strongest, SPECIAL is medium, CAPS is basic.",
+    "Mixing different types gives a power bonus!",
+    "TIP: With 50 coins, buy 1 NUMBER and try '1hello' for a strong start!",
+    "Defeat enemies to earn coins. Good luck!"
+]
 
 SHOP_BUTTONS = {}
 categories = ["uppercase", "special_characters", "numbers"]
@@ -192,7 +231,7 @@ def draw_sidebar(screen, font, font_bold, power_val, scroll_surf, potion_assets,
     screen.blit(limit_btn_text, (btn_text_x, btn_text_y))
 
 def main():
-    global STATE, PASSWORD, COINS, INVENTORY, WAVE_ENEMIES, WAVE, ARROWS, ARROW_SPAWN_TIMER, ARROW_SPAWN_INDEX, STORY_PANEL
+    global STATE, PASSWORD, COINS, INVENTORY, WAVE_ENEMIES, WAVE, ARROWS, ARROW_SPAWN_TIMER, ARROW_SPAWN_INDEX, STORY_PANEL, TUTORIAL_STEP, SHOW_VICTORY_MESSAGE
     pygame.init()
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
     pygame.display.set_caption("Potion Defense")
@@ -218,6 +257,15 @@ def main():
 
     coin_frame_index = 0
     coin_anim_timer = 0
+
+    wizard_img = pygame.image.load('assets/wizard-tutorial.png').convert_alpha()
+    wizard_img = pygame.transform.scale(wizard_img, (250, 250))
+    wizard_panic_img = pygame.image.load('assets/wizard-tutorial-panic.png').convert_alpha()
+    wizard_panic_img = pygame.transform.scale(wizard_panic_img, (250, 250))
+    wizard_proud_img = pygame.image.load('assets/wizard-tutorial-proud.png').convert_alpha()
+    wizard_proud_img = pygame.transform.scale(wizard_proud_img, (250, 250))
+    wizard_disappointed_img = pygame.image.load('assets/wizard-tutorial-disapointed.png').convert_alpha()
+    wizard_disappointed_img = pygame.transform.scale(wizard_disappointed_img, (250, 250))
 
     POTION_SPRITES = {
         "uppercase": {
@@ -275,19 +323,30 @@ def main():
                         STATE = "IDLE"
 
             elif STATE == "IDLE":
+                # Tutorial handling for Wave 1
+                tutorial_active = WAVE == 1 and TUTORIAL_STEP < len(TUTORIAL_MESSAGES)
+
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    for cat, rects in SHOP_BUTTONS.items():
-                        if rects["buy"].collidepoint(event.pos) or rects["sprite"].collidepoint(event.pos):
-                            COINS, INVENTORY = buy_ingredient(cat, COINS, INVENTORY)
-                        if rects["sell"].collidepoint(event.pos):
-                            COINS, INVENTORY, PASSWORD = sell_ingredient(cat, COINS, INVENTORY, PASSWORD)
-                    # Handle limit button click
-                    if LIMIT_BUTTON.collidepoint(event.pos):
-                        COINS, INVENTORY = buy_ingredient("limit", COINS, INVENTORY)
+                    if tutorial_active:
+                        # Advance tutorial on click
+                        TUTORIAL_STEP += 1
+                    elif SHOW_VICTORY_MESSAGE:
+                        # Dismiss victory message on click
+                        SHOW_VICTORY_MESSAGE = False
+                    else:
+                        # Normal shop interactions
+                        for cat, rects in SHOP_BUTTONS.items():
+                            if rects["buy"].collidepoint(event.pos) or rects["sprite"].collidepoint(event.pos):
+                                COINS, INVENTORY = buy_ingredient(cat, COINS, INVENTORY)
+                            if rects["sell"].collidepoint(event.pos):
+                                COINS, INVENTORY, PASSWORD = sell_ingredient(cat, COINS, INVENTORY, PASSWORD)
+                        # Handle limit button click
+                        if LIMIT_BUTTON.collidepoint(event.pos):
+                            COINS, INVENTORY = buy_ingredient("limit", COINS, INVENTORY)
 
                 max_len = 4 + (WAVE * 2) + INVENTORY["limit"]
 
-                if event.type == pygame.KEYDOWN:
+                if event.type == pygame.KEYDOWN and not tutorial_active and not SHOW_VICTORY_MESSAGE:
                     if event.key in (pygame.K_BACKSPACE, pygame.K_KP_ENTER, pygame.K_RETURN):
                         result = handle_typing(event, PASSWORD, INVENTORY)
                     elif len(PASSWORD) < max_len:
@@ -405,6 +464,8 @@ def main():
                         STATE, PASSWORD = "IDLE", ""
                         ARROWS.empty()
                         ARROW_SPAWN_INDEX = 0
+                        if WAVE == 1:
+                            SHOW_VICTORY_MESSAGE = True
                         if WAVE == 5:
                             STATE = "GAME OVER"
                         else:
@@ -415,10 +476,42 @@ def main():
                         ARROW_SPAWN_INDEX = 0
 
             elif STATE == "DEFEAT":
-                overlay = font_bold.render("DEFEATED! Press R to restart", True, (255, 0, 0))
-                screen.blit(overlay, (300, 300))
+                # Draw disappointed wizard
+                screen.blit(wizard_disappointed_img, (20, WINDOW_HEIGHT - 250))
+
+                # Draw score in center of screen
+                try:
+                    score_font = pygame.font.Font("assets/Daydream.otf", 32)
+                except:
+                    score_font = pygame.font.SysFont("Arial", 28, bold=True)
+                score_text = score_font.render(f"You reached Wave {WAVE}", True, (255, 255, 255))
+                score_shadow = score_font.render(f"You reached Wave {WAVE}", True, (0, 0, 0))
+                score_rect = score_text.get_rect(center=(WINDOW_WIDTH // 2 - 100, WINDOW_HEIGHT // 2))
+                screen.blit(score_shadow, (score_rect.x + 2, score_rect.y + 2))
+                screen.blit(score_text, score_rect)
+
+                # Draw chat bubble
+                bubble_rect = pygame.Rect(260, 360, 390, 140)
+                pygame.draw.rect(screen, (245, 235, 220), bubble_rect, border_radius=10)
+                pygame.draw.rect(screen, (80, 60, 40), bubble_rect, width=3, border_radius=10)
+
+                # Draw bubble pointer (triangle pointing to wizard)
+                pointer_points = [(260, 410), (240, 430), (260, 450)]
+                pygame.draw.polygon(screen, (245, 235, 220), pointer_points)
+                pygame.draw.line(screen, (80, 60, 40), (260, 410), (240, 430), 3)
+                pygame.draw.line(screen, (80, 60, 40), (240, 430), (260, 450), 3)
+
+                # Draw defeat text with wrapping
+                tutorial_font = pygame.font.SysFont("Arial", 17)
+                draw_wrapped_text(screen, "Oh no! We lost... Press R to try again!", tutorial_font, (80, 60, 40), bubble_rect, padding=15)
+
+                # Draw hint
+                hint_font = pygame.font.SysFont("Arial", 14)
+                hint_text = hint_font.render("Press R to restart", True, (120, 100, 80))
+                screen.blit(hint_text, (bubble_rect.x + 15, bubble_rect.y + 110))
+
                 if pygame.key.get_pressed()[pygame.K_r]:
-                    COINS, STATE, PASSWORD, WAVE = 200, "IDLE", "", 1
+                    COINS, STATE, PASSWORD, WAVE = 50, "IDLE", "", 1
                     INVENTORY["uppercase"] = 0
                     INVENTORY["special_characters"] = 0
                     INVENTORY["numbers"] = 0
@@ -427,16 +520,72 @@ def main():
                     ARROW_SPAWN_INDEX = 0
                     WAVE_ENEMIES.empty()
                     ARROW_SPAWN_TIMER = 0
+                    TUTORIAL_STEP = 0
+                    SHOW_VICTORY_MESSAGE = False
 
             elif STATE == "IDLE":
                 estimated = get_estimated_power()
                 draw_title(screen, f"WAVE POWER IS {estimated}")
 
+                # Draw tutorial for Wave 1
+                if WAVE == 1 and TUTORIAL_STEP < len(TUTORIAL_MESSAGES):
+                    # Draw wizard in bottom-left (panic for first 2 messages, normal otherwise)
+                    if TUTORIAL_STEP < 2:
+                        screen.blit(wizard_panic_img, (20, WINDOW_HEIGHT - 250))
+                    else:
+                        screen.blit(wizard_img, (20, WINDOW_HEIGHT - 250))
+
+                    # Draw chat bubble
+                    bubble_rect = pygame.Rect(260, 360, 390, 140)
+                    pygame.draw.rect(screen, (245, 235, 220), bubble_rect, border_radius=10)
+                    pygame.draw.rect(screen, (80, 60, 40), bubble_rect, width=3, border_radius=10)
+
+                    # Draw bubble pointer (triangle pointing to wizard)
+                    pointer_points = [(260, 410), (240, 430), (260, 450)]
+                    pygame.draw.polygon(screen, (245, 235, 220), pointer_points)
+                    pygame.draw.line(screen, (80, 60, 40), (260, 410), (240, 430), 3)
+                    pygame.draw.line(screen, (80, 60, 40), (240, 430), (260, 450), 3)
+
+                    # Draw tutorial text with wrapping
+                    tutorial_font = pygame.font.SysFont("Arial", 17)
+                    message = TUTORIAL_MESSAGES[TUTORIAL_STEP]
+                    draw_wrapped_text(screen, message, tutorial_font, (80, 60, 40), bubble_rect, padding=15)
+
+                    # Draw "Click to continue" hint
+                    hint_font = pygame.font.SysFont("Arial", 14)
+                    hint_text = hint_font.render("Click to continue...", True, (120, 100, 80))
+                    screen.blit(hint_text, (bubble_rect.x + 15, bubble_rect.y + 110))
+
+                # Draw victory message after winning a wave
+                elif SHOW_VICTORY_MESSAGE:
+                    # Draw proud wizard
+                    screen.blit(wizard_proud_img, (20, WINDOW_HEIGHT - 250))
+
+                    # Draw chat bubble
+                    bubble_rect = pygame.Rect(260, 360, 390, 140)
+                    pygame.draw.rect(screen, (245, 235, 220), bubble_rect, border_radius=10)
+                    pygame.draw.rect(screen, (80, 60, 40), bubble_rect, width=3, border_radius=10)
+
+                    # Draw bubble pointer (triangle pointing to wizard)
+                    pointer_points = [(260, 410), (240, 430), (260, 450)]
+                    pygame.draw.polygon(screen, (245, 235, 220), pointer_points)
+                    pygame.draw.line(screen, (80, 60, 40), (260, 410), (240, 430), 3)
+                    pygame.draw.line(screen, (80, 60, 40), (240, 430), (260, 450), 3)
+
+                    # Draw victory text with wrapping
+                    tutorial_font = pygame.font.SysFont("Arial", 17)
+                    draw_wrapped_text(screen, "You're doing great, keep it up! Good luck!", tutorial_font, (80, 60, 40), bubble_rect, padding=15)
+
+                    # Draw "Click to continue" hint
+                    hint_font = pygame.font.SysFont("Arial", 14)
+                    hint_text = hint_font.render("Click to continue...", True, (120, 100, 80))
+                    screen.blit(hint_text, (bubble_rect.x + 15, bubble_rect.y + 110))
+
             elif STATE == "GAME OVER":
                 overlay = font_bold.render("VICTORY! Press R to restart", True, (255, 0, 0))
                 screen.blit(overlay, (300, 300))
                 if pygame.key.get_pressed()[pygame.K_r]:
-                    COINS, STATE, PASSWORD, WAVE = 200, "IDLE", "", 1
+                    COINS, STATE, PASSWORD, WAVE = 50, "IDLE", "", 1
                     INVENTORY["uppercase"] = 0
                     INVENTORY["special_characters"] = 0
                     INVENTORY["numbers"] = 0
@@ -445,6 +594,8 @@ def main():
                     ARROW_SPAWN_INDEX = 0
                     WAVE_ENEMIES.empty()
                     ARROW_SPAWN_TIMER = 0
+                    TUTORIAL_STEP = 0
+                    SHOW_VICTORY_MESSAGE = False
 
             draw_sidebar(screen, font_small, font_bold, power_val, SCROLL_IMG, POTION_SPRITES, STATIC_COIN)
 

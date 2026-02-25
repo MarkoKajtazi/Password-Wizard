@@ -174,10 +174,11 @@ def draw_sidebar(screen, font, font_bold, power_val, scroll_surf, potion_assets,
     screen.blit(p_text, (720, 440))
 
     input_box = pygame.Rect(700, 470, 260, 40)
-    pygame.draw.rect(screen, (80, 60, 40), input_box, 2, border_radius=5)
+    pygame.draw.line(screen, (80, 60, 40), (input_box.x, input_box.y + input_box.height), (input_box.x + input_box.width, input_box.y + input_box.height), 2)
 
-    txt_surf = font.render(PASSWORD + "|", True, (40, 30, 20))
-    screen.blit(txt_surf, (input_box.x + 10, input_box.y + 12))
+    password_font = pygame.font.SysFont("Arial", 24)
+    txt_surf = password_font.render(PASSWORD + "|", True, (80, 60, 40))
+    screen.blit(txt_surf, (input_box.x + 10, input_box.y + 8))
 
     max_len = 4 + (WAVE * 2) + INVENTORY["limit"]
     limit_text = font_bold.render(f"Limit {len(PASSWORD)}/{max_len}", True, (100, 50, 50))
@@ -323,7 +324,12 @@ def main():
 
             # Draw play button
             pygame.draw.rect(screen, (50, 50, 100), PLAY_BUTTON, border_radius=8)
-            play_text = font_bold.render("PLAY", True, (255, 255, 255))
+            pygame.draw.rect(screen, (255, 255, 255), PLAY_BUTTON, width=4, border_radius=8)
+            try:
+                play_font = pygame.font.Font("assets/Daydream.otf", 20)
+            except:
+                play_font = pygame.font.SysFont("Arial", 24, bold=True)
+            play_text = play_font.render("PLAY", True, (255, 255, 255))
             play_x = PLAY_BUTTON.x + (PLAY_BUTTON.width - play_text.get_width()) // 2
             play_y = PLAY_BUTTON.y + (PLAY_BUTTON.height - play_text.get_height()) // 2
             screen.blit(play_text, (play_x, play_y))

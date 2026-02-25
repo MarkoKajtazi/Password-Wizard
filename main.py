@@ -250,7 +250,7 @@ def main():
             pass  # Panel not yet created
 
     # Menu button
-    PLAY_BUTTON = pygame.Rect(WINDOW_WIDTH // 2 - 100, WINDOW_HEIGHT // 2, 200, 60)
+    PLAY_BUTTON = pygame.Rect(WINDOW_WIDTH // 2 - 100, 500, 200, 50)
 
     while True:
         dt = clock.tick(60) / 1000
@@ -301,18 +301,28 @@ def main():
 
         # Draw MENU state
         if STATE == "MENU":
-            screen.fill((20, 20, 30))
-            # Draw title
+            screen.blit(menu_background, (0, 0))
             try:
                 title_font = pygame.font.Font("assets/Daydream.otf", 40)
             except:
                 title_font = pygame.font.SysFont("Arial", 60, bold=True)
-            title_surf = title_font.render("PASSWORD WIZARD", True, (255, 255, 255))
-            title_x = (WINDOW_WIDTH - title_surf.get_width()) // 2
-            screen.blit(title_surf, (title_x, 80))
+            title_text = "PASSWORD WIZARD"
+            title_x = (WINDOW_WIDTH - title_font.size(title_text)[0]) // 2
+            title_y = 40
+            border_color = (0, 0, 0)
+            border_size = 2
+            # Draw border by rendering text at offsets
+            for dx in range(-border_size, border_size + 1):
+                for dy in range(-border_size, border_size + 1):
+                    if dx != 0 or dy != 0:
+                        border_surf = title_font.render(title_text, True, border_color)
+                        screen.blit(border_surf, (title_x + dx, title_y + dy))
+            # Draw main text on top
+            title_surf = title_font.render(title_text, True, (255, 255, 255))
+            screen.blit(title_surf, (title_x, title_y))
 
             # Draw play button
-            pygame.draw.rect(screen, (50, 120, 50), PLAY_BUTTON, border_radius=8)
+            pygame.draw.rect(screen, (50, 50, 100), PLAY_BUTTON, border_radius=8)
             play_text = font_bold.render("PLAY", True, (255, 255, 255))
             play_x = PLAY_BUTTON.x + (PLAY_BUTTON.width - play_text.get_width()) // 2
             play_y = PLAY_BUTTON.y + (PLAY_BUTTON.height - play_text.get_height()) // 2
@@ -359,8 +369,20 @@ def main():
                     ARROW_SPAWN_INDEX += 1
                     ARROW_SPAWN_TIMER = 0
 
-                # Update and draw arrows
+                # Update and draw arrows, respawn arrows that hit their target
+                arrows_to_respawn = []
+                for arrow in ARROWS:
+                    if arrow.target and not arrow.hit:
+                        dx = arrow.target.rect.centerx - arrow.pos[0]
+                        dy = arrow.target.rect.centery - arrow.pos[1]
+                        # Check if arrow will hit this frame (same condition as in Arrow.update)
+                        if abs(dx) < 20 and abs(dy) < 20:
+                            arrows_to_respawn.append(arrow.target)
                 ARROWS.update(dt)
+                for target in arrows_to_respawn:
+                    if target and not target.is_done:
+                        new_arrow = Arrow(520, 350, target)
+                        ARROWS.add(new_arrow)
                 ARROWS.draw(screen)
 
                 enemies_done = 0
@@ -397,6 +419,8 @@ def main():
                     INVENTORY["limit"] = 0
                     ARROWS.empty()
                     ARROW_SPAWN_INDEX = 0
+                    WAVE_ENEMIES.empty()
+                    ARROW_SPAWN_TIMER = 0
 
             elif STATE == "IDLE":
                 estimated = get_estimated_power()
@@ -413,6 +437,8 @@ def main():
                     INVENTORY["limit"] = 0
                     ARROWS.empty()
                     ARROW_SPAWN_INDEX = 0
+                    WAVE_ENEMIES.empty()
+                    ARROW_SPAWN_TIMER = 0
 
             draw_sidebar(screen, font_small, font_bold, power_val, SCROLL_IMG, POTION_SPRITES, STATIC_COIN)
 

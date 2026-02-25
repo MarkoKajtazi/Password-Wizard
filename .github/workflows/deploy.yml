@@ -29,8 +29,14 @@ jobs:
       - name: Install Pygbag
         run: pip install pygbag
 
-      - name: Remove unused audio files (MP3 not supported on web)
-        run: rm -rf assets/pixel_defenders_project_assets/Audio
+      - name: Remove unsupported files for web build
+        run: |
+          # Remove MP3 files (not supported on web)
+          find . -name "*.mp3" -delete
+          # Remove Aseprite project files (not needed)
+          find . -name "*.aseprite" -delete
+          # Remove any other potentially problematic files
+          find . -name ".DS_Store" -delete
 
       - name: Build with Pygbag
         run: pygbag --build .

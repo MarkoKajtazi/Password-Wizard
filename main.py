@@ -1,6 +1,7 @@
 import math
 import random
-import pygame, sys
+import asyncio
+import pygame
 from potions import handle_typing, get_power, buy_ingredient, sell_ingredient, POTION_PRICES_MAP
 from battle import start_battle, SmallGoblin, Soldier, draw_tower, Arrow
 
@@ -230,11 +231,11 @@ def draw_sidebar(screen, font, font_bold, power_val, scroll_surf, potion_assets,
     btn_text_y = LIMIT_BUTTON.y + (LIMIT_BUTTON.height - limit_btn_text.get_height()) // 2
     screen.blit(limit_btn_text, (btn_text_x, btn_text_y))
 
-def main():
+async def main():
     global STATE, PASSWORD, COINS, INVENTORY, WAVE_ENEMIES, WAVE, ARROWS, ARROW_SPAWN_TIMER, ARROW_SPAWN_INDEX, STORY_PANEL, TUTORIAL_STEP, SHOW_VICTORY_MESSAGE
     pygame.init()
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-    pygame.display.set_caption("Potion Defense")
+    pygame.display.set_caption("Password Wizard")
     clock = pygame.time.Clock()
 
     font_small = pygame.font.SysFont("Arial", 14)
@@ -301,14 +302,14 @@ def main():
     # Menu button
     PLAY_BUTTON = pygame.Rect(WINDOW_WIDTH // 2 - 100, 500, 200, 50)
 
-    while True:
+    running = True
+    while running:
         dt = clock.tick(60) / 1000
 
         events = pygame.event.get()
         for event in events:
             if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
+                running = False
 
             if STATE == "MENU":
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -600,7 +601,10 @@ def main():
             draw_sidebar(screen, font_small, font_bold, power_val, SCROLL_IMG, POTION_SPRITES, STATIC_COIN)
 
         pygame.display.update()
+        await asyncio.sleep(0)  # Required for Pygbag web compatibility
+
+    pygame.quit()
 
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())

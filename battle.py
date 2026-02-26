@@ -4,9 +4,44 @@ import math
 TOWER_IMG = None
 ARROW_IMG = None
 
+# Arrow type definitions
+ARROW_TYPES = {
+    "normal": {
+        "damage": 8,
+        "color": None,  # No tint
+        "effect": None,
+        "speed": 8
+    },
+    "power": {
+        "damage": 12,
+        "color": (255, 200, 100),  # Orange/gold tint
+        "effect": None,
+        "speed": 10
+    },
+    "magic": {
+        "damage": 8,
+        "color": (150, 100, 255),  # Purple tint
+        "effect": "slow",
+        "speed": 8
+    },
+    "explosive": {
+        "damage": 18,
+        "color": (255, 100, 100),  # Red tint
+        "effect": None,
+        "speed": 6
+    }
+}
+
+
+def tint_image(image, color):
+    """Apply a color tint to an image."""
+    tinted = image.copy()
+    tinted.fill(color + (0,), special_flags=pygame.BLEND_RGB_ADD)
+    return tinted
+
 
 class Arrow(pygame.sprite.Sprite):
-    def __init__(self, start_x, start_y, target_enemy):
+    def __init__(self, start_x, start_y, target_enemy, arrow_type="normal"):
         super().__init__()
         global ARROW_IMG
 
@@ -15,12 +50,23 @@ class Arrow(pygame.sprite.Sprite):
                 "assets/Tiny RPG Character/Arrow(Projectile)/Arrow01(32x32).png").convert_alpha()
             ARROW_IMG = pygame.transform.scale(arrow_surface, (64, 64))
 
-        self.original_image = ARROW_IMG
-        self.image = ARROW_IMG
+        # Get arrow type properties
+        self.arrow_type = arrow_type
+        type_data = ARROW_TYPES.get(arrow_type, ARROW_TYPES["normal"])
+        self.damage = type_data["damage"]
+        self.effect = type_data["effect"]
+        self.speed = type_data["speed"]
+
+        # Apply color tint if specified
+        if type_data["color"]:
+            self.original_image = tint_image(ARROW_IMG, type_data["color"])
+        else:
+            self.original_image = ARROW_IMG
+
+        self.image = self.original_image
         self.rect = self.image.get_rect(center=(start_x, start_y))
         self.pos = [float(start_x), float(start_y)]
         self.target = target_enemy
-        self.speed = 8
         self.hit = False
 
     def update(self, dt):
@@ -46,6 +92,8 @@ class Arrow(pygame.sprite.Sprite):
             # Check if arrow reached target
             if abs(dx) < 20 and abs(dy) < 20:
                 self.hit = True
+                if hasattr(self.target, 'take_damage'):
+                    self.target.take_damage(self.damage, self.effect)
                 self.kill()
 
 class SmallGoblin(pygame.sprite.Sprite):
@@ -59,7 +107,10 @@ class SmallGoblin(pygame.sprite.Sprite):
 
         self.power = 10
         self.value = 20
+        self.health = self.power
         self.is_done = False
+        self.base_speed = 1
+        self.slow_timer = 0
 
         self.walk_frames = self.load_frames(self.walk_sheet, 8, 1)
         self.attack_frames = self.load_frames(self.attack_sheet, 6, 0)
@@ -80,9 +131,21 @@ class SmallGoblin(pygame.sprite.Sprite):
             frames.append(pygame.transform.scale(frame, (250, 220)))
         return frames
 
+    def take_damage(self, amount, effect=None):
+        self.health -= amount
+        if effect == "slow":
+            self.slow_timer = 3.0  # Slowed for 3 seconds
+
     def update(self, dt):
+        # Update slow timer
+        if self.slow_timer > 0:
+            self.slow_timer -= dt
+            speed = self.base_speed * 0.4  # 60% slower when slowed
+        else:
+            speed = self.base_speed
+
         if not self.is_done:
-            self.rect.x += 2
+            self.rect.x += speed
             self.frames = self.walk_frames
         else:
             self.frames = self.attack_frames
@@ -105,7 +168,10 @@ class Soldier(pygame.sprite.Sprite):
 
         self.power = 15
         self.value = 25
+        self.health = self.power
         self.is_done = False
+        self.base_speed = 1.5
+        self.slow_timer = 0
 
         self.walk_frames = self.load_frames(self.walk_sheet, 8, 1)
         self.attack_frames = self.load_frames(self.attack_sheet, 6, 0)
@@ -126,9 +192,21 @@ class Soldier(pygame.sprite.Sprite):
             frames.append(pygame.transform.scale(frame, (200, 200)))
         return frames
 
+    def take_damage(self, amount, effect=None):
+        self.health -= amount
+        if effect == "slow":
+            self.slow_timer = 3.0  # Slowed for 3 seconds
+
     def update(self, dt):
+        # Update slow timer
+        if self.slow_timer > 0:
+            self.slow_timer -= dt
+            speed = self.base_speed * 0.4  # 60% slower when slowed
+        else:
+            speed = self.base_speed
+
         if not self.is_done:
-            self.rect.x += 3
+            self.rect.x += speed
             self.frames = self.walk_frames
         else:
             self.frames = self.attack_frames

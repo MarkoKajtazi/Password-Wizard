@@ -2,8 +2,8 @@ import math
 import random
 import asyncio
 import pygame
-from potions import handle_typing, get_power, buy_ingredient, sell_ingredient, POTION_PRICES_MAP
-from battle import start_battle, SmallGoblin, Soldier, draw_tower, Arrow
+from potions import handle_typing, get_power, buy_ingredient, sell_ingredient, POTION_PRICES_MAP, count_char_types
+from battle import SmallGoblin, Soldier, draw_tower, Arrow, ARROW_TYPES
 
 WINDOW_WIDTH = 1000
 WINDOW_HEIGHT = 600
@@ -48,8 +48,24 @@ INVENTORY = {
 }
 WAVE_ENEMIES = pygame.sprite.Group()
 ARROWS = pygame.sprite.Group()
-ARROW_SPAWN_TIMER = 0
-ARROW_SPAWN_INDEX = 0
+COINS_EARNED_THIS_WAVE = 0
+
+# Ammo system - counts based on password character types
+AMMO_INVENTORY = {
+    "normal": 0,      # From lowercase letters
+    "power": 0,       # From uppercase letters
+    "magic": 0,       # From special characters
+    "explosive": 0    # From numbers
+}
+SELECTED_AMMO = "normal"
+
+# Ammo multipliers (arrows per character)
+AMMO_PER_CHAR = {
+    "normal": 2,      # 2 arrows per lowercase
+    "power": 2,       # 2 arrows per uppercase
+    "magic": 2,       # 2 arrows per special char
+    "explosive": 1    # 1 arrow per number (powerful but limited)
+}
 
 TUTORIAL_STEP = 0
 SHOW_VICTORY_MESSAGE = False
@@ -104,6 +120,14 @@ def start_new_round():
         group.add(enemy)
 
     return group
+
+
+def get_clicked_enemy(mouse_pos, enemies):
+    """Return frontmost clickable enemy at mouse position."""
+    clicked = [e for e in enemies if e.rect.collidepoint(mouse_pos) and e.health > 0]
+    if clicked:
+        return max(clicked, key=lambda e: e.rect.x)
+    return None
 
 
 def get_sprite(sheet, column, row, scale_to=(64, 64)):
@@ -232,7 +256,7 @@ def draw_sidebar(screen, font, font_bold, power_val, scroll_surf, potion_assets,
     screen.blit(limit_btn_text, (btn_text_x, btn_text_y))
 
 async def main():
-    global STATE, PASSWORD, COINS, INVENTORY, WAVE_ENEMIES, WAVE, ARROWS, ARROW_SPAWN_TIMER, ARROW_SPAWN_INDEX, STORY_PANEL, TUTORIAL_STEP, SHOW_VICTORY_MESSAGE
+    global STATE, PASSWORD, COINS, INVENTORY, WAVE_ENEMIES, WAVE, ARROWS, AMMO_INVENTORY, SELECTED_AMMO, COINS_EARNED_THIS_WAVE, STORY_PANEL, TUTORIAL_STEP, SHOW_VICTORY_MESSAGE
     pygame.init()
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
     pygame.display.set_caption("Password Wizard")
@@ -323,6 +347,27 @@ async def main():
                     if STORY_PANEL > len(STORY_PANELS):
                         STATE = "IDLE"
 
+            elif STATE == "BATTLE":
+                # Ammo selection with number keys
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_1:
+                        SELECTED_AMMO = "normal"
+                    elif event.key == pygame.K_2:
+                        SELECTED_AMMO = "power"
+                    elif event.key == pygame.K_3:
+                        SELECTED_AMMO = "magic"
+                    elif event.key == pygame.K_4:
+                        SELECTED_AMMO = "explosive"
+
+                # Click to shoot
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if AMMO_INVENTORY[SELECTED_AMMO] > 0:
+                        clicked_enemy = get_clicked_enemy(event.pos, WAVE_ENEMIES)
+                        if clicked_enemy:
+                            arrow = Arrow(520, 350, clicked_enemy, arrow_type=SELECTED_AMMO)
+                            ARROWS.add(arrow)
+                            AMMO_INVENTORY[SELECTED_AMMO] -= 1
+
             elif STATE == "IDLE":
                 # Tutorial handling for Wave 1
                 tutorial_active = WAVE == 1 and TUTORIAL_STEP < len(TUTORIAL_MESSAGES)
@@ -356,6 +401,14 @@ async def main():
                         result = PASSWORD
                     if result == "SUBMITTED":
                         WAVE_ENEMIES = start_new_round()
+                        # Calculate ammo from password composition
+                        char_counts = count_char_types(PASSWORD)
+                        AMMO_INVENTORY["normal"] = char_counts["lowercase"] * AMMO_PER_CHAR["normal"]
+                        AMMO_INVENTORY["power"] = char_counts["uppercase"] * AMMO_PER_CHAR["power"]
+                        AMMO_INVENTORY["magic"] = char_counts["special_characters"] * AMMO_PER_CHAR["magic"]
+                        AMMO_INVENTORY["explosive"] = char_counts["numbers"] * AMMO_PER_CHAR["explosive"]
+                        SELECTED_AMMO = "normal"
+                        COINS_EARNED_THIS_WAVE = 0
                         STATE = "BATTLE"
                     else:
                         PASSWORD = result
@@ -425,56 +478,64 @@ async def main():
                 WAVE_ENEMIES.update(dt)
                 WAVE_ENEMIES.draw(screen)
 
-                # Spawn arrows toward enemies
-                ARROW_SPAWN_TIMER += dt
-                enemy_list = list(WAVE_ENEMIES)
-                if ARROW_SPAWN_TIMER >= 0.15 and ARROW_SPAWN_INDEX < len(enemy_list):
-                    target_enemy = enemy_list[ARROW_SPAWN_INDEX]
-                    arrow = Arrow(520, 350, target_enemy)
-                    ARROWS.add(arrow)
-                    ARROW_SPAWN_INDEX += 1
-                    ARROW_SPAWN_TIMER = 0
-
-                # Update and draw arrows, respawn arrows that hit their target
-                arrows_to_respawn = []
-                for arrow in ARROWS:
-                    if arrow.target and not arrow.hit:
-                        dx = arrow.target.rect.centerx - arrow.pos[0]
-                        dy = arrow.target.rect.centery - arrow.pos[1]
-                        # Check if arrow will hit this frame (same condition as in Arrow.update)
-                        if abs(dx) < 20 and abs(dy) < 20:
-                            arrows_to_respawn.append(arrow.target)
+                # Update and draw arrows
                 ARROWS.update(dt)
-                for target in arrows_to_respawn:
-                    if target and not target.is_done:
-                        new_arrow = Arrow(520, 350, target)
-                        ARROWS.add(new_arrow)
                 ARROWS.draw(screen)
 
-                enemies_done = 0
+                # Track coins from defeated enemies (enemies killed by arrows)
+                for enemy in list(WAVE_ENEMIES):
+                    if hasattr(enemy, 'health') and enemy.health <= 0:
+                        COINS_EARNED_THIS_WAVE += enemy.value
+                        enemy.kill()
 
-                for enemy in WAVE_ENEMIES:
-                    if enemy.rect.x >= 400:
-                        enemy.is_done = True
-                        enemies_done += 1
+                # Check for enemies reaching tower (lose condition)
+                enemies_at_tower = sum(1 for e in WAVE_ENEMIES if e.rect.x >= 400)
 
-                if enemies_done == len(WAVE_ENEMIES) and len(WAVE_ENEMIES) > 0:
-                    success, collected_coins = start_battle(power_val, WAVE_ENEMIES)
-                    if success:
-                        COINS += collected_coins
-                        STATE, PASSWORD = "IDLE", ""
-                        ARROWS.empty()
-                        ARROW_SPAWN_INDEX = 0
-                        if WAVE == 1:
-                            SHOW_VICTORY_MESSAGE = True
-                        if WAVE == 5:
-                            STATE = "GAME OVER"
-                        else:
-                            WAVE += 1
+                # Win: all enemies defeated
+                if len(WAVE_ENEMIES) == 0:
+                    COINS += COINS_EARNED_THIS_WAVE
+                    STATE, PASSWORD = "IDLE", ""
+                    ARROWS.empty()
+                    AMMO_INVENTORY["normal"] = 0
+                    AMMO_INVENTORY["power"] = 0
+                    AMMO_INVENTORY["magic"] = 0
+                    AMMO_INVENTORY["explosive"] = 0
+                    if WAVE == 1:
+                        SHOW_VICTORY_MESSAGE = True
+                    if WAVE == 5:
+                        STATE = "GAME OVER"
                     else:
-                        STATE = "DEFEAT"
-                        ARROWS.empty()
-                        ARROW_SPAWN_INDEX = 0
+                        WAVE += 1
+
+                # Lose: enemy reached tower
+                elif enemies_at_tower > 0:
+                    STATE = "DEFEAT"
+                    ARROWS.empty()
+                    AMMO_INVENTORY["normal"] = 0
+                    AMMO_INVENTORY["power"] = 0
+                    AMMO_INVENTORY["magic"] = 0
+                    AMMO_INVENTORY["explosive"] = 0
+
+                # Display ammo UI
+                ammo_y = 70
+                ammo_types = [
+                    ("1: NORMAL", "normal", (200, 200, 200)),
+                    ("2: POWER", "power", (255, 200, 100)),
+                    ("3: MAGIC", "magic", (150, 100, 255)),
+                    ("4: EXPLOSIVE", "explosive", (255, 100, 100))
+                ]
+                for label, ammo_key, color in ammo_types:
+                    count = AMMO_INVENTORY[ammo_key]
+                    # Highlight selected ammo
+                    if ammo_key == SELECTED_AMMO:
+                        text_color = color
+                        prefix = "> "
+                    else:
+                        text_color = (150, 150, 150)
+                        prefix = "  "
+                    ammo_text = font_bold.render(f"{prefix}{label}: {count}", True, text_color)
+                    screen.blit(ammo_text, (20, ammo_y))
+                    ammo_y += 25
 
             elif STATE == "DEFEAT":
                 # Draw disappointed wizard
@@ -518,9 +579,12 @@ async def main():
                     INVENTORY["numbers"] = 0
                     INVENTORY["limit"] = 0
                     ARROWS.empty()
-                    ARROW_SPAWN_INDEX = 0
+                    AMMO_INVENTORY["normal"] = 0
+                    AMMO_INVENTORY["power"] = 0
+                    AMMO_INVENTORY["magic"] = 0
+                    AMMO_INVENTORY["explosive"] = 0
                     WAVE_ENEMIES.empty()
-                    ARROW_SPAWN_TIMER = 0
+                    COINS_EARNED_THIS_WAVE = 0
                     TUTORIAL_STEP = 0
                     SHOW_VICTORY_MESSAGE = False
 
@@ -592,9 +656,12 @@ async def main():
                     INVENTORY["numbers"] = 0
                     INVENTORY["limit"] = 0
                     ARROWS.empty()
-                    ARROW_SPAWN_INDEX = 0
+                    AMMO_INVENTORY["normal"] = 0
+                    AMMO_INVENTORY["power"] = 0
+                    AMMO_INVENTORY["magic"] = 0
+                    AMMO_INVENTORY["explosive"] = 0
                     WAVE_ENEMIES.empty()
-                    ARROW_SPAWN_TIMER = 0
+                    COINS_EARNED_THIS_WAVE = 0
                     TUTORIAL_STEP = 0
                     SHOW_VICTORY_MESSAGE = False
 

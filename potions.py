@@ -22,6 +22,26 @@ CHAIN_BONUS = {
     4: 2.0     # All four types: 100% bonus
 }
 
+def count_char_types(password):
+    """Count how many of each character type are in the password."""
+    counts = {
+        "lowercase": 0,
+        "uppercase": 0,
+        "special_characters": 0,
+        "numbers": 0
+    }
+    for char in password:
+        if char.islower():
+            counts["lowercase"] += 1
+        elif char.isupper():
+            counts["uppercase"] += 1
+        elif char.isdigit():
+            counts["numbers"] += 1
+        elif char in string.punctuation:
+            counts["special_characters"] += 1
+    return counts
+
+
 def get_power(password):
     total_power = 0
     types_used = set()

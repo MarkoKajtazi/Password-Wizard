@@ -7,26 +7,26 @@ ARROW_IMG = None
 # Arrow type definitions
 ARROW_TYPES = {
     "normal": {
-        "damage": 8,
-        "color": None,  # No tint
+        "damage": 5,              # Low damage (free ammo)
+        "color": None,            # No tint
         "effect": None,
         "speed": 8
     },
     "power": {
-        "damage": 12,
-        "color": (255, 200, 100),  # Orange/gold tint
+        "damage": 8,              # Medium damage, fast
+        "color": (255, 200, 100), # Orange/gold tint
         "effect": None,
         "speed": 10
     },
     "magic": {
-        "damage": 8,
-        "color": (150, 100, 255),  # Purple tint
+        "damage": 6,              # Low damage but slows
+        "color": (150, 100, 255), # Purple tint
         "effect": "slow",
         "speed": 8
     },
     "explosive": {
-        "damage": 18,
-        "color": (255, 100, 100),  # Red tint
+        "damage": 15,             # Highest damage, slow arrow
+        "color": (255, 100, 100), # Red tint
         "effect": None,
         "speed": 6
     }

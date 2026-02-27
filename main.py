@@ -61,9 +61,9 @@ SELECTED_AMMO = "normal"
 
 # Ammo multipliers (arrows per character)
 AMMO_PER_CHAR = {
-    "normal": 2,      # 2 arrows per lowercase
-    "power": 2,       # 2 arrows per uppercase
-    "magic": 2,       # 2 arrows per special char
+    "normal": 1,      # 1 arrow per lowercase (free but weak)
+    "power": 2,       # 2 arrows per uppercase (good value)
+    "magic": 2,       # 2 arrows per special char (utility)
     "explosive": 1    # 1 arrow per number (powerful but limited)
 }
 
@@ -74,10 +74,19 @@ TUTORIAL_MESSAGES = [
     "You must make a good password potion to defend us!",
     "Lowercase letters are free to use anytime.",
     "Buy CAPS, NUMBERS, or SPECIAL from the shop to unlock them.",
-    "NUMBERS are the strongest, SPECIAL is medium, CAPS is basic.",
-    "Mixing different types gives a power bonus!",
-    "TIP: With 50 coins, buy 1 NUMBER and try '1hello' for a strong start!",
-    "Defeat enemies to earn coins. Good luck!"
+    "Each character type gives you different AMMO to shoot!",
+    "TIP: With 50 coins, buy 1 CAPS and try 'Hello' for a strong start!",
+    "Type your password and press ENTER to start the battle!"
+]
+
+# Battle tutorial for Wave 1
+BATTLE_TUTORIAL_STEP = 0
+BATTLE_TUTORIAL_MESSAGES = [
+    "CLICK on enemies to shoot arrows at them!",
+    "Your password characters become ammo: lowercase=Normal, CAPS=Power, symbols=Magic, numbers=Explosive",
+    "Press 1-4 to switch ammo types. Each type has different damage!",
+    "Normal=5dmg, Power=8dmg, Magic=6dmg+slow, Explosive=15dmg",
+    "Don't let enemies reach the tower! Now defeat them!"
 ]
 
 SHOP_BUTTONS = {}
@@ -256,7 +265,7 @@ def draw_sidebar(screen, font, font_bold, power_val, scroll_surf, potion_assets,
     screen.blit(limit_btn_text, (btn_text_x, btn_text_y))
 
 async def main():
-    global STATE, PASSWORD, COINS, INVENTORY, WAVE_ENEMIES, WAVE, ARROWS, AMMO_INVENTORY, SELECTED_AMMO, COINS_EARNED_THIS_WAVE, STORY_PANEL, TUTORIAL_STEP, SHOW_VICTORY_MESSAGE
+    global STATE, PASSWORD, COINS, INVENTORY, WAVE_ENEMIES, WAVE, ARROWS, AMMO_INVENTORY, SELECTED_AMMO, COINS_EARNED_THIS_WAVE, STORY_PANEL, TUTORIAL_STEP, BATTLE_TUTORIAL_STEP, SHOW_VICTORY_MESSAGE
     pygame.init()
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
     pygame.display.set_caption("Password Wizard")
@@ -348,7 +357,10 @@ async def main():
                         STATE = "IDLE"
 
             elif STATE == "BATTLE":
-                # Ammo selection with number keys
+                # Check if battle tutorial is active (Wave 1, before all messages shown)
+                battle_tutorial_active = WAVE == 1 and BATTLE_TUTORIAL_STEP < len(BATTLE_TUTORIAL_MESSAGES)
+
+                # Ammo selection with number keys (always allowed)
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_1:
                         SELECTED_AMMO = "normal"
@@ -359,14 +371,18 @@ async def main():
                     elif event.key == pygame.K_4:
                         SELECTED_AMMO = "explosive"
 
-                # Click to shoot
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    if AMMO_INVENTORY[SELECTED_AMMO] > 0:
-                        clicked_enemy = get_clicked_enemy(event.pos, WAVE_ENEMIES)
-                        if clicked_enemy:
-                            arrow = Arrow(520, 350, clicked_enemy, arrow_type=SELECTED_AMMO)
-                            ARROWS.add(arrow)
-                            AMMO_INVENTORY[SELECTED_AMMO] -= 1
+                    if battle_tutorial_active:
+                        # Advance battle tutorial on click
+                        BATTLE_TUTORIAL_STEP += 1
+                    else:
+                        # Normal shooting (tutorial done or not Wave 1)
+                        if AMMO_INVENTORY[SELECTED_AMMO] > 0:
+                            clicked_enemy = get_clicked_enemy(event.pos, WAVE_ENEMIES)
+                            if clicked_enemy:
+                                arrow = Arrow(520, 350, clicked_enemy, arrow_type=SELECTED_AMMO)
+                                ARROWS.add(arrow)
+                                AMMO_INVENTORY[SELECTED_AMMO] -= 1
 
             elif STATE == "IDLE":
                 # Tutorial handling for Wave 1
@@ -475,51 +491,83 @@ async def main():
 
             if STATE == "BATTLE":
                 draw_title(screen, f"WAVE {WAVE}")
-                WAVE_ENEMIES.update(dt)
-                WAVE_ENEMIES.draw(screen)
 
-                # Update and draw arrows
-                ARROWS.update(dt)
+                # Check if battle tutorial is active
+                battle_tutorial_active = WAVE == 1 and BATTLE_TUTORIAL_STEP < len(BATTLE_TUTORIAL_MESSAGES)
+
+                # Only update enemies and game logic if tutorial is done
+                if not battle_tutorial_active:
+                    WAVE_ENEMIES.update(dt)
+                    ARROWS.update(dt)
+
+                    # Track coins from defeated enemies (enemies killed by arrows)
+                    for enemy in list(WAVE_ENEMIES):
+                        if hasattr(enemy, 'health') and enemy.health <= 0:
+                            COINS_EARNED_THIS_WAVE += enemy.value
+                            enemy.kill()
+
+                    # Check for enemies reaching tower (lose condition)
+                    enemies_at_tower = sum(1 for e in WAVE_ENEMIES if e.rect.x >= 400)
+
+                    # Win: all enemies defeated
+                    if len(WAVE_ENEMIES) == 0:
+                        COINS += COINS_EARNED_THIS_WAVE
+                        STATE, PASSWORD = "IDLE", ""
+                        ARROWS.empty()
+                        AMMO_INVENTORY["normal"] = 0
+                        AMMO_INVENTORY["power"] = 0
+                        AMMO_INVENTORY["magic"] = 0
+                        AMMO_INVENTORY["explosive"] = 0
+                        if WAVE == 1:
+                            SHOW_VICTORY_MESSAGE = True
+                        if WAVE == 5:
+                            STATE = "GAME OVER"
+                        else:
+                            WAVE += 1
+
+                    # Lose: enemy reached tower
+                    elif enemies_at_tower > 0:
+                        STATE = "DEFEAT"
+                        ARROWS.empty()
+                        AMMO_INVENTORY["normal"] = 0
+                        AMMO_INVENTORY["power"] = 0
+                        AMMO_INVENTORY["magic"] = 0
+                        AMMO_INVENTORY["explosive"] = 0
+
+                # Always draw enemies and arrows
+                WAVE_ENEMIES.draw(screen)
                 ARROWS.draw(screen)
 
-                # Track coins from defeated enemies (enemies killed by arrows)
-                for enemy in list(WAVE_ENEMIES):
-                    if hasattr(enemy, 'health') and enemy.health <= 0:
-                        COINS_EARNED_THIS_WAVE += enemy.value
-                        enemy.kill()
+                # Draw battle tutorial if active
+                if battle_tutorial_active:
+                    # Draw wizard
+                    screen.blit(wizard_img, (20, WINDOW_HEIGHT - 250))
 
-                # Check for enemies reaching tower (lose condition)
-                enemies_at_tower = sum(1 for e in WAVE_ENEMIES if e.rect.x >= 400)
+                    # Draw chat bubble
+                    bubble_rect = pygame.Rect(260, 360, 390, 140)
+                    pygame.draw.rect(screen, (245, 235, 220), bubble_rect, border_radius=10)
+                    pygame.draw.rect(screen, (80, 60, 40), bubble_rect, width=3, border_radius=10)
 
-                # Win: all enemies defeated
-                if len(WAVE_ENEMIES) == 0:
-                    COINS += COINS_EARNED_THIS_WAVE
-                    STATE, PASSWORD = "IDLE", ""
-                    ARROWS.empty()
-                    AMMO_INVENTORY["normal"] = 0
-                    AMMO_INVENTORY["power"] = 0
-                    AMMO_INVENTORY["magic"] = 0
-                    AMMO_INVENTORY["explosive"] = 0
-                    if WAVE == 1:
-                        SHOW_VICTORY_MESSAGE = True
-                    if WAVE == 5:
-                        STATE = "GAME OVER"
-                    else:
-                        WAVE += 1
+                    # Draw bubble pointer
+                    pointer_points = [(260, 410), (240, 430), (260, 450)]
+                    pygame.draw.polygon(screen, (245, 235, 220), pointer_points)
+                    pygame.draw.line(screen, (80, 60, 40), (260, 410), (240, 430), 3)
+                    pygame.draw.line(screen, (80, 60, 40), (240, 430), (260, 450), 3)
 
-                # Lose: enemy reached tower
-                elif enemies_at_tower > 0:
-                    STATE = "DEFEAT"
-                    ARROWS.empty()
-                    AMMO_INVENTORY["normal"] = 0
-                    AMMO_INVENTORY["power"] = 0
-                    AMMO_INVENTORY["magic"] = 0
-                    AMMO_INVENTORY["explosive"] = 0
+                    # Draw tutorial text
+                    tutorial_font = pygame.font.SysFont("Arial", 17)
+                    message = BATTLE_TUTORIAL_MESSAGES[BATTLE_TUTORIAL_STEP]
+                    draw_wrapped_text(screen, message, tutorial_font, (80, 60, 40), bubble_rect, padding=15)
+
+                    # Draw "Click to continue" hint
+                    hint_font = pygame.font.SysFont("Arial", 14)
+                    hint_text = hint_font.render("Click to continue...", True, (120, 100, 80))
+                    screen.blit(hint_text, (bubble_rect.x + 15, bubble_rect.y + 110))
 
                 # Display ammo UI
                 ammo_y = 70
                 ammo_types = [
-                    ("1: NORMAL", "normal", (200, 200, 200)),
+                    ("1: NORMAL", "normal", (255, 255, 255)),
                     ("2: POWER", "power", (255, 200, 100)),
                     ("3: MAGIC", "magic", (150, 100, 255)),
                     ("4: EXPLOSIVE", "explosive", (255, 100, 100))
@@ -586,6 +634,7 @@ async def main():
                     WAVE_ENEMIES.empty()
                     COINS_EARNED_THIS_WAVE = 0
                     TUTORIAL_STEP = 0
+                    BATTLE_TUTORIAL_STEP = 0
                     SHOW_VICTORY_MESSAGE = False
 
             elif STATE == "IDLE":
@@ -663,6 +712,7 @@ async def main():
                     WAVE_ENEMIES.empty()
                     COINS_EARNED_THIS_WAVE = 0
                     TUTORIAL_STEP = 0
+                    BATTLE_TUTORIAL_STEP = 0
                     SHOW_VICTORY_MESSAGE = False
 
             draw_sidebar(screen, font_small, font_bold, power_val, SCROLL_IMG, POTION_SPRITES, STATIC_COIN)

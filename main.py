@@ -423,6 +423,24 @@ async def main():
                         AMMO_INVENTORY["power"] = char_counts["uppercase"] * AMMO_PER_CHAR["power"]
                         AMMO_INVENTORY["magic"] = char_counts["special_characters"] * AMMO_PER_CHAR["magic"]
                         AMMO_INVENTORY["explosive"] = char_counts["numbers"] * AMMO_PER_CHAR["explosive"]
+                        total_enemy_hp = sum(e.health for e in WAVE_ENEMIES)
+
+                        password_power = get_power(PASSWORD)
+
+                        if password_power >= total_enemy_hp:
+
+                            total_possible_damage = (
+                                    AMMO_INVENTORY["normal"] * 5 +
+                                    AMMO_INVENTORY["power"] * 8 +
+                                    AMMO_INVENTORY["magic"] * 6 +
+                                    AMMO_INVENTORY["explosive"] * 15
+                            )
+
+                            if total_possible_damage < total_enemy_hp:
+                                damage_needed = total_enemy_hp - total_possible_damage
+                                extra_arrows = math.ceil(damage_needed / 5) + 3
+                                AMMO_INVENTORY["normal"] += extra_arrows
+
                         SELECTED_AMMO = "normal"
                         COINS_EARNED_THIS_WAVE = 0
                         STATE = "BATTLE"
